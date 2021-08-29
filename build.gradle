@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs 'src'
+        }
+    }
+ }
+
+group 'dzuchun.paper.slimeores'
+version '1.5-INDEV'
+String workspace = 'Documents/Pluginning/1.17/SlimeOres'
+
+repositories() {
+    mavenCentral()
+    maven { url 'https://papermc.io/repo/repository/maven-public/' }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.17.1-R0.1-SNAPSHOT'
+}
+
+jar {
+    String userHome = System.properties['user.home']
+    destinationDirectory = file("$userHome/$workspace/PaperServer/plugins")
+    archiveFileName = project.name + "-" + version + ".jar"
+
+    from {
+    	fileTree("/src/").collect { it.isDirectory() ? it : zipTree(it) }
+    	files("plugin.yml", "config.yml")
+    }
+}
+
+tasks.register("runServer"){
+  doLast {
+     exec {
+          executable "./runServer.sh"
+      }
+  }
+}
+
+tasks.register("testPlugin"){
+	dependsOn jar
+	dependsOn runServer
+}

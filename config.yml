@@ -1,0 +1,56 @@
+Pickaxes (represent items that can damage veins and their power):
+- WOODEN_PICKAXE power 1.00
+- STONE_PICKAXE power 2.00
+- GOLDEN_PICKAXE power 3.00
+- IRON_PICKAXE power 4.00
+- DIAMOND_PICKAXE power 5.00
+- NETHERITE_PICKAXE power 6.00
+Allowed spawn materials (represent blocks, veins can spawn on):
+- STONE
+- DIRT
+- GRAVEL
+- SAND
+- GRASS_BLOCK
+- COARSE_DIRT
+- ANDESITE
+- DIORITE
+- GRANITE
+Allowed spawn covers (represent blocks, veins can spawn under):
+- AIR
+- CAVE_AIR
+- VOID_AIR
+- SNOW
+- TALL_GRASS
+- GRASS
+- FERN
+- LARGE_FERN
+Veins glow (if enabled, newly spawned veins will glow, so they are easier to spot): false
+Vein height deviation (from mean height, calculated on chunk generation): 4
+Check pattern (represents points on the chunk that are used to determine biomes and mean height):
+- x= 0 y= 0
+- x= 0 y= 4
+- x= 0 y= 8
+- x= 0 y= 12
+- x= 4 y= 0
+- x= 4 y= 4
+- x= 4 y= 8
+- x= 4 y= 12
+- x= 8 y= 0
+- x= 8 y= 4
+- x= 8 y= 8
+- x= 8 y= 12
+- x= 12 y= 0
+- x= 12 y= 4
+- x= 12 y= 8
+- x= 12 y= 12
+Respawn check ticks interval (once in this interval server will iterate through all ore chunks to spawn new veins): 300
+Ore respawn interval ticks (once in this interval ore chunks will attempt to spawn veins): 144000
+Vein health multiplier:
+- RAW_IRON multiplied 3.00 times
+? Vein generation weights (theese are proportional to probabillity that a newly generated
+  chunk will be a corresponsing type)
+: - NONE weight 1
+  - RAW_IRON weight 1
+Vein generation weights used for cold chunks:
+- NONE weight 1
+- RAW_IRON weight 2

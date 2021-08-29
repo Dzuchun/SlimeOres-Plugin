@@ -1,0 +1,17 @@
+name: SlimeOres
+version: 1.5-INDEV
+author: Dzuchun
+main: dzuchun.paper.slimeores.SlimeOres
+api-version: 1.17
+commands:
+  spawnore:
+    description: Spawns an ore chunk, that yields some iron ore.
+    usage: "/spawnore <radius>"
+  killveins:
+    description: Kills all existent ore chunks.
+  setvein:
+    description: Sets vein type for sender's chunk
+    usage: "/setvein <veintype name>"
+  spawnveins:
+    description: Triggers veins spawn operation
+    usage: "/spawnveins" 
