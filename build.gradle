@@ -11,8 +11,8 @@ sourceSets {
  }
 
 group 'dzuchun.paper.slimeores'
-version '1.5-INDEV'
-String workspace = 'Documents/Pluginning/1.17/SlimeOres'
+version '1.6-OPT'
+String workspace = 'git/SlimeOres'
 
 repositories() {
     mavenCentral()

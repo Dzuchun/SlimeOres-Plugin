@@ -9,9 +9,12 @@ commands:
     usage: "/spawnore <radius>"
   killveins:
     description: Kills all existent ore chunks.
-  setvein:
+  setchunktype:
     description: Sets vein type for sender's chunk
     usage: "/setvein <veintype name>"
   spawnveins:
     description: Triggers veins spawn operation
-    usage: "/spawnveins" 
+    usage: "/spawnveins"
+  scanchunks:
+    description: Scans chunks in a given radius for orechunks
+    usage: "/scanchunks <radius>"

@@ -10,14 +10,17 @@ import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 
 import dzuchun.paper.slimeores.command.KillVeinsExecutor;
-import dzuchun.paper.slimeores.command.SetVeinExecutor;
+import dzuchun.paper.slimeores.command.ScanChunksExecutor;
+import dzuchun.paper.slimeores.command.SetChunkTypeExecutor;
 import dzuchun.paper.slimeores.command.SpawnOreCommandExecutor;
 import dzuchun.paper.slimeores.command.SpawnVeinsExecutor;
+import dzuchun.paper.slimeores.data.VeinPersistedDataType;
 import dzuchun.paper.slimeores.event.EntityEventHandler;
 import dzuchun.paper.slimeores.event.WorldEventHandler;
 import dzuchun.paper.slimeores.world.OreChunksSystem;
@@ -44,11 +47,13 @@ public class SlimeOres extends JavaPlugin {
 		LOG.info("SlimeOres enabled");
 		instance = this;
 		scheduler = Bukkit.getScheduler();
-		LOG.info("Setting up config");
+		LOG.fine("Setting up config");
 		this.reloadConfig();
 		Config.init();
 		this.saveDefaultConfig();
-		LOG.info("Reading ore chunks");
+		this.loadConfigurations();
+//		LOG.warning(String.format("Chunk cooldown: %d", Config.ORE_RESPAWN_COOLDOWN.get()));
+		LOG.fine("Reading ore chunks");
 		File file = new File(savedOreChunksPath);
 		try {
 			FileInputStream input = new FileInputStream(file);
@@ -60,32 +65,44 @@ public class SlimeOres extends JavaPlugin {
 		} catch (IOException e) {
 			LOG.warning(String.format("Error while reading ore chunks: %s at %s", e, e.getStackTrace()[0].toString()));
 		}
-		LOG.info("Registering listeners");
+		LOG.fine("Registering listeners");
 		PluginManager manager = this.getServer().getPluginManager();
 		manager.registerEvents(new EntityEventHandler(), this);
 		manager.registerEvents(new WorldEventHandler(), this);
-		LOG.info("Registering commands");
+
+		LOG.fine("Registering commands");
 		// spawnore
 		String spawnOreName = "spawnore";
 		PluginCommand spawnOreCommand = this.getCommand(spawnOreName);
 		CommandExecutor spawnOreExecutor = new SpawnOreCommandExecutor();
 		spawnOreCommand.setExecutor(spawnOreExecutor);
+		spawnOreCommand.setPermission(PermissionDefault.OP.name());
 		// killveins
 		String killVeinsName = "killveins";
 		PluginCommand killVeinsCommand = this.getCommand(killVeinsName);
 		CommandExecutor killVeinsExecutor = new KillVeinsExecutor();
 		killVeinsCommand.setExecutor(killVeinsExecutor);
+		killVeinsCommand.setPermission(PermissionDefault.OP.name());
 		// setvein
-		String setVeinName = "setvein";
-		PluginCommand setVeinCommand = this.getCommand(setVeinName);
-		CommandExecutor setVeinExecutor = new SetVeinExecutor();
-		setVeinCommand.setExecutor(setVeinExecutor);
+		String setChunkTypeName = "setchunktype";
+		PluginCommand setChunkTypeCommand = this.getCommand(setChunkTypeName);
+		CommandExecutor setChunkTypeExecutor = new SetChunkTypeExecutor();
+		setChunkTypeCommand.setExecutor(setChunkTypeExecutor);
+		setChunkTypeCommand.setPermission(PermissionDefault.OP.name());
 		// spawnveins
 		String spawnVeinsName = "spawnveins";
 		PluginCommand spawnVeinsCommand = this.getCommand(spawnVeinsName);
 		CommandExecutor spawnVeinsExecutor = new SpawnVeinsExecutor();
 		spawnVeinsCommand.setExecutor(spawnVeinsExecutor);
-		LOG.info("Staring spawnore tasks...");
+		spawnVeinsCommand.setPermission(PermissionDefault.OP.name());
+		// scanchunks
+		String scanChunksName = "scanChunks";
+		PluginCommand scanChunksCommand = this.getCommand(scanChunksName);
+		CommandExecutor scanChunksExecutor = new ScanChunksExecutor();
+		scanChunksCommand.setExecutor(scanChunksExecutor);
+		scanChunksCommand.setPermission(PermissionDefault.OP.name());
+
+		LOG.fine("Staring spawnore tasks...");
 		final long interval = Config.RESPAWN_CHECK_INTERVAL.get();
 		@SuppressWarnings({ "deprecation", "unused" })
 		int a = scheduler.scheduleAsyncRepeatingTask(this, () -> OreChunksSystem.checkAndSpawnVeins(), interval,
@@ -94,9 +111,9 @@ public class SlimeOres extends JavaPlugin {
 
 	@Override
 	public void onDisable() {
-		LOG.info("Canceling scheduled tasks...");
+		LOG.fine("Canceling scheduled tasks...");
 		scheduler.cancelTasks(this);
-		LOG.info("Saving ore-suppliying chunks...");
+		LOG.fine("Saving ore-suppliying chunks...");
 		File file = new File(savedOreChunksPath);
 		FileOutputStream output;
 		try {
@@ -109,8 +126,12 @@ public class SlimeOres extends JavaPlugin {
 			LOG.warning(String.format("Exception while writing chunks (data might be lost): %s at %s", e,
 					e.getStackTrace()[0].toString()));
 		}
-		LOG.info("Saving config");
+		LOG.fine("Saving config");
 		this.saveConfig();
+	}
+
+	private void loadConfigurations() {
+		VeinPersistedDataType.config();
 	}
 
 }

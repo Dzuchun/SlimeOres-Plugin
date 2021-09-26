@@ -3,7 +3,6 @@ package dzuchun.paper.slimeores.event;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
 
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
@@ -20,15 +19,11 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.loot.LootContext;
 
 import dzuchun.paper.slimeores.Config;
-import dzuchun.paper.slimeores.SlimeOres;
 import dzuchun.paper.slimeores.loot.OreChunkLootTable;
 import dzuchun.paper.slimeores.util.Util;
 import dzuchun.paper.slimeores.world.OreChunksSystem;
 
 public class EntityEventHandler implements Listener {
-
-	@SuppressWarnings("unused")
-	private static final Logger LOG = SlimeOres.getInstance().LOG;
 
 	@EventHandler
 	public void onEntityDeath(EntityDeathEvent event) {

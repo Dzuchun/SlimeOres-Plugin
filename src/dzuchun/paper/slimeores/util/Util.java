@@ -9,11 +9,11 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.function.Function;
 
-import org.bukkit.Chunk;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Slime;
 
 import dzuchun.paper.slimeores.data.VeinPersistedDataType;
+import dzuchun.paper.slimeores.world.OreChunksSystem.ChunkPos;
 
 public class Util {
 
@@ -71,14 +71,14 @@ public class Util {
 		}
 	}
 
-	public static Collection<Biome> getBiomesInChunk(Chunk chunk, Iterator<Point> checkPattern) {
+	public static Collection<Biome> getBiomesInChunk(ChunkPos chunk, Iterator<Point> checkPattern) {
 		ArrayList<Biome> res = new ArrayList<>(0);
 		while (checkPattern.hasNext()) {
 			Point p = checkPattern.next();
 //			OrechunkPlugin.getInstance().LOG.warning(String.format("Checking point at [%d, %d]", p.x, p.z));
-			int x = chunk.getX() * 16 + p.x;
-			int z = chunk.getZ() * 16 + p.z;
-			Biome b = chunk.getWorld().getHighestBlockAt(x, z).getBiome();
+			int x = chunk.x * 16 + p.x;
+			int z = chunk.z * 16 + p.z;
+			Biome b = chunk.world.getHighestBlockAt(x, z).getBiome();
 			if (!res.contains(b)) {
 				res.add(b);
 			}

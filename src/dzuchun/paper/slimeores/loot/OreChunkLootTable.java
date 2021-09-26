@@ -3,7 +3,6 @@ package dzuchun.paper.slimeores.loot;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Random;
-import java.util.logging.Logger;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -18,8 +17,6 @@ import org.jetbrains.annotations.NotNull;
 import dzuchun.paper.slimeores.SlimeOres;
 
 public class OreChunkLootTable implements LootTable {
-	@SuppressWarnings("unused")
-	private static final Logger LOG = SlimeOres.getInstance().LOG;
 
 	public static final OreChunkLootTable INSTANCE = new OreChunkLootTable();
 

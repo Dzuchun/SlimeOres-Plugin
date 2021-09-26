@@ -1,5 +1,5 @@
 JAVA="/usr/lib/jvm/java-16-openjdk/bin/java"
-WORKSPACE="/home/dzu/Documents/Pluginning/1.17/SlimeOres/PaperServer"
+WORKSPACE="/home/dzu/git/SlimeOres/PaperServer"
 MC_VERSION="1.17.1"
 PAPER_BUILD="209"
 

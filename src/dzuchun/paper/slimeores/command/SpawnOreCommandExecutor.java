@@ -1,7 +1,6 @@
 package dzuchun.paper.slimeores.command;
 
 import java.util.Random;
-import java.util.logging.Logger;
 
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -18,18 +17,12 @@ import dzuchun.paper.slimeores.world.OreChunksSystem;
 import net.kyori.adventure.text.Component;
 
 public class SpawnOreCommandExecutor implements CommandExecutor {
-	@SuppressWarnings("unused")
-	private static final Logger LOG = SlimeOres.getInstance().LOG;
 
 	private static final Random rand = new Random();
 
 	@Override
 	public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label,
 			@NotNull String[] args) {
-		if (!sender.isOp()) {
-			sender.sendMessage(Component.text("You are not OP"));
-			return false;
-		}
 		if (args.length < 1) {
 			sender.sendMessage(Component.text("Please provide radius to generate in"));
 			return false;

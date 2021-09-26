@@ -7,13 +7,13 @@ import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Random;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
@@ -47,7 +47,6 @@ import dzuchun.paper.slimeores.data.VeinPersistedDataType;
 import dzuchun.paper.slimeores.data.VeinPersistedDataType.VeinType;
 import dzuchun.paper.slimeores.util.Util;
 import dzuchun.paper.slimeores.util.WeightedRandomHolder;
-import net.kyori.adventure.text.Component;
 
 public class OreChunksSystem {
 	private static final Logger LOG = SlimeOres.getInstance().LOG;
@@ -59,82 +58,214 @@ public class OreChunksSystem {
 	private static final Collection<Util.Point> CHECK_PATTERN = Config.CHECK_PATTERN.get();
 
 	public static class OreState {
+		public static final int BYTES = Long.BYTES + 1 + Integer.BYTES * 2;
+
 		public Long timeGenerated;
 		public boolean isGenerated;
 		public final int meanHeight;
-		public final VeinType veinType;
+		public final ChunkType chunkType;
 
-		public OreState(Chunk chunk, VeinType typeIn) {
+		public OreState(ChunkPos chunk, ChunkType typeIn) {
 			this.isGenerated = false;
-			this.timeGenerated = chunk.getWorld().getGameTime();
+			this.timeGenerated = chunk.world.getGameTime() + (long) (rand.nextDouble() * ORE_RESPAWN_INTERVAL);
 			this.meanHeight = getMeanHeight(chunk, CHECK_PATTERN.iterator());
-			this.veinType = typeIn;
+			this.chunkType = typeIn;
 		}
 
-		public OreState(long time, boolean generatedOre, int meanHightIn, VeinType veinTypeIn) {
+		public OreState(ByteBuffer source) {
+			this(source.getLong(), source.get() == 1 ? true : false, source.getInt(),
+					ChunkType.values()[source.getInt()]);
+		}
+
+		private OreState(long time, boolean generatedOre, int meanHightIn, ChunkType veinTypeIn) {
 			this.isGenerated = generatedOre;
 			this.timeGenerated = time;
 			this.meanHeight = meanHightIn;
-			this.veinType = veinTypeIn;
+			this.chunkType = veinTypeIn;
+		}
+
+		public void toBuffer(ByteBuffer buffer) {
+			buffer.putLong(this.timeGenerated);
+			buffer.put((byte) (this.isGenerated ? 1 : 0));
+			buffer.putInt(this.meanHeight);
+			buffer.putInt(this.chunkType.ordinal());
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj instanceof OreState) {
+				OreState state = (OreState) obj;
+				return (this.timeGenerated == state.timeGenerated) && (this.isGenerated == state.isGenerated)
+						&& (this.meanHeight == state.meanHeight) && (this.chunkType == state.chunkType);
+			} else {
+				return super.equals(obj);
+			}
 		}
 	}
 
-	private static int getMeanHeight(Chunk chunk, Iterator<Util.Point> pattern) {
+	private static int getMeanHeight(ChunkPos chunk, Iterator<Util.Point> pattern) {
 		int sum = 0;
 		int amount = 0;
 		while (pattern.hasNext()) {
 			Util.Point p = pattern.next();
-			int x = chunk.getX() * 16 + p.x;
-			int z = chunk.getZ() * 16 + p.z;
-			Block b = chunk.getWorld().getHighestBlockAt(x, z);
+			int x = chunk.x * 16 + p.x;
+			int z = chunk.z * 16 + p.z;
+			Block b = chunk.world.getHighestBlockAt(x, z);
 			amount++;
 			sum += b.getY();
 		}
 		return sum / amount;
 	}
 
-	/**
-	 * Stores time required for chunk to regenerate ore
-	 */
-	private static final Long ORE_RESPAWN_INTERVAL = Config.ORE_RESPAWN_COOLDOWN.get();
+	public static enum ChunkType {
+		NO_ORE, ORE, COLD_ORE;
+
+		private ChunkType() {
+		}
+
+		private WeightedRandomHolder<VeinType> veinTypeDeterminer;
+
+		public VeinType determineVein(Random rand) {
+			if (veinTypeDeterminer == null) {
+				veinTypeDeterminer = getHolderForType(this);
+			}
+			return veinTypeDeterminer.getForRandom(rand);
+		}
+
+		private static WeightedRandomHolder<VeinType> getHolderForType(ChunkType type) {
+			switch (type) {
+			case NO_ORE:
+				return Config.NO_ORE_VEIN_GENERATOR;
+			case ORE:
+				return Config.ORE_VEIN_GENERATOR;
+			case COLD_ORE:
+				return Config.COLD_ORE_VEIN_GENERATOR;
+			}
+			LOG.warning(String.format(
+					"Tried to get vein generator for chunk type %s, which has no assignes generator. Please, contact support.",
+					type.toString()));
+			return null;
+		}
+	}
+
+	public static class ChunkPos {
+		public final int x;
+		public final int z;
+		public final World world;
+
+		/**
+		 *
+		 * @param chunkIn != null
+		 */
+		public ChunkPos(Chunk chunkIn) {
+			this.x = chunkIn.getX();
+			this.z = chunkIn.getZ();
+			lastChunk = chunkIn;
+			world = chunkIn.getWorld();
+		}
+
+		/**
+		 *
+		 * @param xIn
+		 * @param zIn
+		 * @param worldIn != null
+		 */
+		public ChunkPos(int xIn, int zIn, World worldIn) {
+			this.x = xIn;
+			this.z = zIn;
+			world = worldIn;
+		}
+
+		private Chunk lastChunk = null;
+
+		/**
+		 * Uses {@link World#getChunkAt(int, int)}, which is VERY SLOW
+		 *
+		 * @param worldIn Uses this world to get the chunk, if no world set.
+		 * @return
+		 */
+		public Chunk get() {
+			if (lastChunk == null) {
+				lastChunk = world.getChunkAt(x, z);
+			}
+			return lastChunk;
+		}
+
+		public Chunk getNew() {
+			lastChunk = world.getChunkAt(x, z);
+			return lastChunk;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (!(obj instanceof ChunkPos)) {
+				return false;
+			}
+			ChunkPos pos = (ChunkPos) obj;
+			return (pos.x == this.x) && (pos.z == this.z) && (pos.world == this.world);
+		}
+	}
+
 	// Don't bully me, i'd really appreciate any help you can provide with
 	// storing this information more effectively.
 	/**
 	 * Stores the time all ore chunks were generated
 	 */
-	private static final Map<Chunk, OreState> ORE_CHUNKS_GENERATED = Maps.synchronizedBiMap(HashBiMap.create());
-	private static final Object ORE_CHUNKS_KEY = new Object();
+	private static final Map<ChunkPos, OreState> ORE_CHUNKS = Maps.synchronizedBiMap(HashBiMap.create());
+
+//	private static final Object ORE_CHUNKS_KEY = new Object();
+	private static OreState getOreState(ChunkPos pos) {
+		synchronized (ORE_CHUNKS) {
+			Optional<ChunkPos> found = ORE_CHUNKS.keySet().stream().filter(cPos -> cPos.equals(pos)).findAny();
+			if (found.isPresent()) {
+				return ORE_CHUNKS.get(found.get());
+			} else {
+				LOG.warning("getOreChunk returned null; contact support.");
+				return null;
+			}
+		}
+	}
 
 	private static Random rand = new Random();
 
-	private static final WeightedRandomHolder<VeinType> VEIN_TYPE_GENERATOR = Config.VEIN_TYPE_GENERATOR;
-	private static final WeightedRandomHolder<VeinType> COLD_VEIN_TYPE_GENERATOR = Config.COLD_VEIN_TYPE_GENERATOR;
+	private static final WeightedRandomHolder<ChunkType> VEIN_TYPE_GENERATOR = Config.CHUNK_TYPE_GENERATOR;
+	private static final WeightedRandomHolder<ChunkType> COLD_VEIN_TYPE_GENERATOR = Config.COLD_CHUNK_TYPE_GENERATOR;
 
-	public static boolean checkIfOre(Chunk chunk) {
-		if (ORE_CHUNKS_GENERATED.containsKey(chunk)) {
+	private static final Collection<Biome> FORBIDDEN_BIOMES = Config.FORBIDDEN_BIOMES.get();
+	private static final Collection<Biome> COLD_BIOMES = Config.COLD_BIOMES.get();
+
+	/**
+	 * Not nesessary to invoke in main thread
+	 *
+	 * @param chunk chunk to test
+	 * @return is chunk is an ore chunk (all required actions are already commited).
+	 */
+	public static boolean checkIfOre(ChunkPos chunkPos) {
+		if (ORE_CHUNKS.containsKey(chunkPos)) {
 			return true;
 		}
-		// TODO rewrite
-		if (!chunk.getWorld().getName().equals("world")) {
+		// TODO restricts for dimension
+		if (!chunkPos.world.getName().equals("world")) {
 			return false;
 		}
-		Collection<Biome> biomes = Util.getBiomesInChunk(chunk, CHECK_PATTERN.iterator());
+		Collection<Biome> biomes = Util.getBiomesInChunk(chunkPos, CHECK_PATTERN.iterator());
 		if (Util.containsAny(biomes, FORBIDDEN_BIOMES)) {
 			// Chunk intersects forbidden biome
 			return false;
 		}
 		boolean isCold = Util.containsAny(biomes, COLD_BIOMES);
-		long seed = chunk.getWorld().getSeed();
-		int x = chunk.getX();
-		int z = chunk.getZ();
+		long seed = chunkPos.world.getSeed();
+		int x = chunkPos.x;
+		int z = chunkPos.z;
 		long randSeed = seed * (43 + 13 * x + 37 * z);
 		rand.setSeed(randSeed);
-		WeightedRandomHolder<VeinType> generator = isCold ? COLD_VEIN_TYPE_GENERATOR : VEIN_TYPE_GENERATOR;
-		VeinType type = generator.getForRandom(rand);
-		boolean isOre = type != VeinType.NONE;
+		WeightedRandomHolder<ChunkType> generator = isCold ? COLD_VEIN_TYPE_GENERATOR : VEIN_TYPE_GENERATOR;
+		ChunkType type = generator.getForRandom(rand);
+		boolean isOre = type != ChunkType.NO_ORE;
 		if (isOre) {
-			synchronized (ORE_CHUNKS_KEY) {
-				ORE_CHUNKS_GENERATED.put(chunk, new OreState(chunk, type)); // TODO parametrize type
+			final OreState state = new OreState(chunkPos, type);
+			synchronized (ORE_CHUNKS) {
+				ORE_CHUNKS.put(chunkPos, state);
 			}
 		}
 //			LOG.warning(String.format("Chunk at [%d, %d] is an ore chunk: %.2f", chunk.getX(), chunk.getZ(), chance));
@@ -142,37 +273,23 @@ public class OreChunksSystem {
 		return isOre;
 	}
 
-	/**
-	 * Contains biomes ore chunks should not spawn in
-	 */
-	private static final List<Biome> FORBIDDEN_BIOMES = Arrays.asList(Biome.OCEAN, Biome.COLD_OCEAN,
-			Biome.DEEP_COLD_OCEAN, Biome.DEEP_FROZEN_OCEAN, Biome.DEEP_LUKEWARM_OCEAN, Biome.DEEP_OCEAN,
-			Biome.DEEP_WARM_OCEAN, Biome.FROZEN_OCEAN, Biome.LUKEWARM_OCEAN, Biome.WARM_OCEAN, Biome.RIVER,
-			Biome.FROZEN_RIVER, Biome.DESERT_LAKES);
-	/**
-	 * Contains biomes that have 75% have ore instead of 50%.
-	 */
-	private static final List<Biome> COLD_BIOMES = Arrays.asList(Biome.TAIGA, Biome.TAIGA_HILLS, Biome.TAIGA_MOUNTAINS,
-			Biome.GIANT_SPRUCE_TAIGA, Biome.GIANT_SPRUCE_TAIGA_HILLS, Biome.GIANT_TREE_TAIGA,
-			Biome.GIANT_TREE_TAIGA_HILLS, Biome.SNOWY_TAIGA, Biome.SNOWY_TAIGA_HILLS, Biome.SNOWY_TAIGA_MOUNTAINS,
-			Biome.SNOWY_BEACH, Biome.SNOWY_MOUNTAINS, Biome.SNOWY_TUNDRA);
-
-	public static boolean isOre(Chunk chunk) {
-		return ORE_CHUNKS_GENERATED.containsKey(chunk);
+	public static boolean isOre(ChunkPos chunk) {
+		return ORE_CHUNKS.containsKey(chunk);
 
 	}
 
-	public static void readFrom(InputStream inpu) throws IOException {
-		if (!ORE_CHUNKS_GENERATED.isEmpty()) {
+	public static void readFrom(InputStream input) throws IOException {
+		long beginTime = System.currentTimeMillis();
+		if (!ORE_CHUNKS.isEmpty()) {
 			LOG.warning("Attempted to read ore chunks once more (not permitted), returning");
 			return;
 		}
 		Server server = PLUGIN.getServer();
-		if (inpu.available() > Integer.BYTES) {
-			int dims = Util.readInt(inpu);
+		if (input.available() > Integer.BYTES) {
+			int dims = Util.readInt(input);
 			for (int i = 0; i < dims; i++) {
-				int thisWorldSize = Util.readInt(inpu);
-				byte[] bytes = inpu.readNBytes(thisWorldSize);
+				int thisWorldSize = Util.readInt(input);
+				byte[] bytes = input.readNBytes(thisWorldSize);
 				ByteBuffer tmp = ByteBuffer.wrap(bytes);
 				tmp.rewind();
 				String dimName = Util.readStringFromBuffer(tmp);
@@ -183,16 +300,9 @@ public class OreChunksSystem {
 					for (int j = 0; j < chunks; j++) {
 						int x = tmp.getInt();
 						int z = tmp.getInt();
-						chunk = world.getChunkAt(x, z);
-						long generatedTime = tmp.getLong();
-						boolean isGenerated = (tmp.get()) == 1;
-						int n = tmp.getInt();
-						VeinType veinType = VeinType.values()[n];
-						int meanHeight = tmp.getInt();
-						synchronized (ORE_CHUNKS_GENERATED) {
-							ORE_CHUNKS_GENERATED.put(chunk,
-									new OreState(generatedTime, isGenerated, meanHeight, veinType));
-						}
+						ChunkPos pos = new ChunkPos(x, z, world);
+						OreState state = new OreState(tmp);
+						ORE_CHUNKS.put(pos, state);
 					}
 				} catch (BufferUnderflowException e) {
 					LOG.warning(String.format(
@@ -204,40 +314,37 @@ public class OreChunksSystem {
 		} else {
 			LOG.warning("Supplied stream has no int to indicate worlds amount - file is invalid");
 		}
+		LOG.finer(String.format("Readed chunks in %dms", System.currentTimeMillis() - beginTime));
 	}
 
 	public static void writeTo(OutputStream output) throws IOException {
+//		LOG.warning(String.format("There are %d ore chunks now", ORE_CHUNKS.size()));
 		// Sorting chunks
-		Map<World, List<Entry<Chunk, OreState>>> sortedChunks = sortedChunks(e -> true);
+		Map<World, List<Entry<ChunkPos, OreState>>> sortedChunks = sortedChunks(e -> true);
 		// Writing chunks
 		Util.writeInt(output, sortedChunks.size());
 		sortedChunks.entrySet().forEach(e -> {
 			World world = e.getKey();
 			try {
 				String worldName = world.getName();
-				List<Entry<Chunk, OreState>> chunks = e.getValue();
+				List<Entry<ChunkPos, OreState>> chunks = e.getValue(); // TODO remove?
 				int chunksSize = chunks.size();
 				int thisWorldBufferSize = Integer.BYTES + worldName.getBytes().length + // For world name
 				Integer.BYTES + // For chunks number
 				// For each chunk:
-				chunksSize * (2 * Integer.BYTES + // For chunk coords
-				Long.BYTES + 1 + Integer.BYTES + // For OreState
-				Integer.BYTES); // For mean height
+				chunksSize * (2 * Integer.BYTES // For chunk coords
+						+ OreState.BYTES); // For ore state
 				ByteBuffer tmp = ByteBuffer.allocate(thisWorldBufferSize);
 				Util.writeStringToBuf(tmp, worldName);
 				tmp.putInt(chunksSize);
-				LOG.info(String.format("For world %s writing %d ore chunks", world, chunks.size()));
-				Chunk chunk = null;
+				LOG.fine(String.format("For world %s writing %d ore chunks", world, chunks.size()));
+				ChunkPos chunk = null;
 				try {
-					for (Entry<Chunk, OreState> entry : chunks) {
+					for (Entry<ChunkPos, OreState> entry : chunks) {
 						chunk = entry.getKey();
-						tmp.putInt(chunk.getX());
-						tmp.putInt(chunk.getZ());
-						OreState state = entry.getValue();
-						tmp.putLong(state.timeGenerated);
-						tmp.put((byte) (state.isGenerated ? 1 : 0));
-						tmp.putInt(state.veinType.ordinal());
-						tmp.putInt(state.meanHeight);
+						tmp.putInt(chunk.x);
+						tmp.putInt(chunk.z);
+						entry.getValue().toBuffer(tmp);
 					}
 				} catch (BufferUnderflowException | BufferOverflowException e1) {
 					LOG.warning(String.format("Failed to write chunk \"%s\": %s at %s", chunk, e1.toString(),
@@ -254,14 +361,15 @@ public class OreChunksSystem {
 		});
 	}
 
-	private static Map<World, List<Entry<Chunk, OreState>>> sortedChunks(Predicate<Entry<Chunk, OreState>> condition) {
-		final Map<World, List<Entry<Chunk, OreState>>> res = Maps.newHashMap();
+	private static Map<World, List<Entry<ChunkPos, OreState>>> sortedChunks(
+			Predicate<Entry<ChunkPos, OreState>> condition) {
+		final Map<World, List<Entry<ChunkPos, OreState>>> res = Maps.newHashMap();
 		PLUGIN.getServer().getWorlds().forEach(w -> res.put(w, new ArrayList<>()));
-		synchronized (ORE_CHUNKS_KEY) {
-			ORE_CHUNKS_GENERATED.entrySet().forEach(entry -> {
+		synchronized (ORE_CHUNKS) {
+			ORE_CHUNKS.entrySet().forEach(entry -> {
 				if (condition.test(entry)) {
-					Chunk chunk = entry.getKey();
-					res.get(chunk.getWorld()).add(entry);
+					ChunkPos chunkPos = entry.getKey();
+					res.get(chunkPos.world).add(entry);
 				}
 			});
 		}
@@ -276,18 +384,23 @@ public class OreChunksSystem {
 	}
 
 	/**
+	 * A random object used to determine type of the vein and generation position
+	 */
+	private static Random spawnRand = new Random();
+
+	/**
 	 * @return a map containing locations and type server should spawn veins later
 	 *         on
 	 */
 	private static Map<Location, VeinType> getVeinsSpawnMap() {
 		final Map<Location, VeinType> res = new LinkedHashMap<>();
 		// Sorting chunks
-		Map<World, List<Entry<Chunk, OreState>>> sortedChunks = sortedChunks(e -> !e.getValue().isGenerated);
+		Map<World, List<Entry<ChunkPos, OreState>>> sortedChunks = sortedChunks(e -> !e.getValue().isGenerated);
 		sortedChunks.entrySet().forEach(e -> {
 			World world = e.getKey();
 			// Filtering chunks, so only ones need spawning will remain
 			// Sorting chunks, so the most recent will be first
-			List<Entry<Chunk, OreState>> chunks = e.getValue().parallelStream()
+			List<Entry<ChunkPos, OreState>> chunks = e.getValue().parallelStream()
 					.filter(entry -> !(entry.getValue().isGenerated))
 					.sorted((e1, e2) -> (int) (e1.getValue().timeGenerated - e2.getValue().timeGenerated)).toList();
 			int size = chunks.size();
@@ -301,15 +414,17 @@ public class OreChunksSystem {
 			int gens = 0;
 			int fails = 0;
 			for (int i = 0; i < size; i++) {
-				Entry<Chunk, OreState> entry = chunks.get(i);
+				Entry<ChunkPos, OreState> entry = chunks.get(i);
 				OreState state = entry.getValue();
 				if (gameTime < state.timeGenerated) {
 					break;
 				}
-				Chunk chunk = entry.getKey();
+				ChunkPos chunk = entry.getKey();
 				Location genLoc = getVeinSpawnLoc(chunk, state);
 				if (genLoc != null) {
-					res.put(genLoc, state.veinType);
+					ChunkType chunkType = state.chunkType;
+					VeinType type = chunkType.determineVein(spawnRand);
+					res.put(genLoc, type);
 					state.isGenerated = true;
 					gens++;
 				} else {
@@ -317,17 +432,14 @@ public class OreChunksSystem {
 					fails++;
 				}
 			}
-			LOG.warning(
-					String.format("For dimension \"%s\" generated ore in %d chunks, %d chunks failed, %d total pending",
-							world.getName(), gens, fails, size - gens));
+			LOG.fine(String.format("For dimension \"%s\" generated ore in %d chunks, %d chunks failed", world.getName(),
+					gens, fails));
 		});
 		return res;
 	}
 
 	private static final Collection<Material> ALLOWED_MATERIALS = Config.ALLOWED_SPAWN_MATERIALS.get();
 	private static final Collection<Material> ALLOWED_COVERS = Config.ALLOWED_SPAWN_COVERS.get();
-
-	private static Random spawnRand = new Random();
 
 	private static Predicate<Block> spawnBlockPredicate(OreState state) {
 		return b -> b.isSolid() && ALLOWED_MATERIALS.contains(b.getType())
@@ -336,10 +448,10 @@ public class OreChunksSystem {
 
 	private static final boolean VEINS_GLOW = Config.VEINS_GLOW.get();
 
-	private static Location getVeinSpawnLoc(Chunk chunk, OreState state) {
-		World world = chunk.getWorld();
-		int x = chunk.getX() * 16 + spawnRand.nextInt(15);
-		int z = chunk.getZ() * 16 + spawnRand.nextInt(15);
+	private static Location getVeinSpawnLoc(ChunkPos chunk, OreState state) {
+		World world = chunk.world;
+		int x = chunk.x * 16 + spawnRand.nextInt(15);
+		int z = chunk.z * 16 + spawnRand.nextInt(15);
 		Block block = getHighestBlockAt(world, x, z, spawnBlockPredicate(state));
 		if (block == null) {
 //			LOG.info(String.format("For chunk at [%d, %d] it's too high or too low for ore spawn", chunk.getX(),
@@ -366,26 +478,9 @@ public class OreChunksSystem {
 		World world = loc.getWorld();
 		Entity spawned = world.spawnEntity(loc, EntityType.SLIME);
 		Slime slime = (Slime) spawned;
-		double sizeRand = spawnRand.nextDouble();
-		if (sizeRand < 0.5d) {
-			// Small chunk
-			slime.customName(Component.text("малая жила железа"));
-			slime.setSize(1);
-		} else if (sizeRand < 0.75d) {
-			// Medium chunk
-			slime.customName(Component.text("средняя жила железа"));
-			slime.setSize(2);
-		} else if (sizeRand < 0.9d) {
-			// Large chunk
-			slime.customName(Component.text("большая жила железа"));
-			slime.setSize(3);
-		} else {
-			// Giant chunk
-			slime.customName(Component.text("гиганская жила железа"));
-			slime.setSize(4);
-//			slime.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(40);
-		}
-//		allignChunkWithSurface(slime);
+		int size = type.generateSize(spawnRand);
+		slime.setSize(size);
+		slime.customName(type.getNameForSize(size));
 		slime.setAI(false);
 		slime.setPersistent(true);
 		slime.setGlowing(VEINS_GLOW);
@@ -413,9 +508,19 @@ public class OreChunksSystem {
 		return null;
 	}
 
+	/**
+	 * Stores time required for chunk to regenerate ore
+	 */
+	private static final Long ORE_RESPAWN_INTERVAL = Config.ORE_RESPAWN_COOLDOWN.get();
+	/**
+	 * Stores multipliers applied to {@link ORE_RESPAWN_INTERVAL} according to chunk
+	 * type
+	 */
+	private static final Map<ChunkType, Double> COOLDOWN_MULTIPLIERS = Config.CHUNK_TYPE_COOLDOWN_MULTIPLIER.get();
+
 	public static void setHarvested(Chunk chunk) {
 //			LOG.warning(String.format("Settings chunk at [%d, %d] as harvested", chunk.getX(), chunk.getZ()));
-		OreState state = ORE_CHUNKS_GENERATED.get(chunk);
+		OreState state = getOreState(new ChunkPos(chunk));
 		if (state != null) {
 			long gameTime = chunk.getWorld().getGameTime();
 			setHarvested(state, gameTime);
@@ -425,7 +530,8 @@ public class OreChunksSystem {
 
 	public static void setHarvested(OreState state, long gameTime) {
 		state.isGenerated = false;
-		state.timeGenerated = gameTime + ORE_RESPAWN_INTERVAL;
+		state.timeGenerated = (long) (gameTime
+				+ ORE_RESPAWN_INTERVAL * COOLDOWN_MULTIPLIERS.getOrDefault(state.chunkType, 1.0d));
 	}
 
 	/**
@@ -451,16 +557,113 @@ public class OreChunksSystem {
 				.map(e -> (LivingEntity) e);
 	}
 
-	public static void setVeinType(Chunk chunk, VeinType type) {
-		if (type == VeinType.NONE) {
-			synchronized (ORE_CHUNKS_KEY) {
-				ORE_CHUNKS_GENERATED.remove(chunk);
+	public static void setChunkType(ChunkPos chunk, ChunkType type) {
+		if (type == ChunkType.NO_ORE) {
+			synchronized (ORE_CHUNKS) {
+				ORE_CHUNKS.remove(chunk);
 			}
 		} else {
 			final OreState state = new OreState(chunk, type);
-			synchronized (ORE_CHUNKS_KEY) {
-				ORE_CHUNKS_GENERATED.put(chunk, state);
+			synchronized (ORE_CHUNKS) {
+				ORE_CHUNKS.put(chunk, state);
 			}
 		}
+	}
+
+	/**
+	 * Not nesessary to invoke in main thread
+	 *
+	 * @param chunks iterator that contains all chunks to test
+	 * @return chunks that were added to ore chunks list
+	 */
+	public static Collection<ChunkPos> checkAllIfOre(Iterator<ChunkPos> chunks) {
+		final Map<ChunkPos, OreState> newChunks = new LinkedHashMap<>(0);
+		while (chunks.hasNext()) {
+			ChunkPos chunk = chunks.next();
+			// TODO restricts for dimension
+			if (ORE_CHUNKS.containsKey(chunk) || !chunk.world.getName().equals("world")) {
+				continue;
+			}
+			Collection<Biome> biomes = Util.getBiomesInChunk(chunk, CHECK_PATTERN.iterator());
+			if (Util.containsAny(biomes, FORBIDDEN_BIOMES)) {
+				// Chunk intersects forbidden biome
+				continue;
+			}
+			boolean isCold = Util.containsAny(biomes, COLD_BIOMES);
+			long seed = chunk.world.getSeed();
+			int x = chunk.x;
+			int z = chunk.z;
+			long randSeed = seed * (43 + 13 * x + 37 * z);
+			rand.setSeed(randSeed);
+			WeightedRandomHolder<ChunkType> generator = isCold ? COLD_VEIN_TYPE_GENERATOR : VEIN_TYPE_GENERATOR;
+			ChunkType type = generator.getForRandom(rand);
+			boolean isOre = type != ChunkType.NO_ORE;
+			if (isOre) {
+				final OreState state = new OreState(chunk, type);
+				newChunks.put(chunk, state);
+			}
+		}
+		synchronized (ORE_CHUNKS) {
+			LOG.info(String.format("Scan found %d chunks", newChunks.size()));
+			newChunks.forEach((c, s) -> ORE_CHUNKS.put(c, s));
+		}
+
+		return newChunks.keySet();
+	}
+
+	public static void testChunks(World world, int x0, int z0, int radius, Runnable onEnd) {
+		SCHEDULER.runTaskAsynchronously(PLUGIN, () -> {
+			synchronized (ORE_CHUNKS) {
+				ORE_CHUNKS.forEach((c, s) -> {
+					setChunkType(c, null);
+				});
+				ORE_CHUNKS.clear();
+			}
+			final int lastX = x0 + radius;
+			final int lastZ = z0 + radius;
+			checkAllIfOre(new Iterator<ChunkPos>() {
+				int x = x0 - radius;
+				int z = z0 - radius;
+				boolean hasNextInternal = true;
+				long lastReport = 0;
+				double totalChunks = (2 * radius + 1) * (2 * radius + 1);
+				int scannedChunks = 0;
+
+				@Override
+				public boolean hasNext() {
+					return hasNextInternal;
+				}
+
+				@Override
+				public ChunkPos next() {
+					ChunkPos res = new ChunkPos(x, z, world);
+					z++;
+					if (z > lastZ) {
+						z = z0 - radius;
+						x++;
+					}
+					if (x > lastX) {
+						hasNextInternal = false;
+					}
+					long current = System.currentTimeMillis();
+					if ((current - lastReport) > 60000L) {
+						lastReport = current;
+						LOG.info(String.format("Chunks cranning is %.1f percent done",
+								100.0d * scannedChunks / totalChunks));
+					}
+					scannedChunks++;
+					return res;
+				}
+			});
+			// TODO ?????
+//			for (int x = x0 - radius; x < lastX; x++) {
+//				for (int z = z0 - radius; z < lastZ; z++) {
+//					checkIfOre(world.getChunkAt(x, z));
+//				}
+//			}
+			if (onEnd != null) {
+				onEnd.run();
+			}
+		});
 	}
 }

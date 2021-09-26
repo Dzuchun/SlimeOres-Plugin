@@ -12,11 +12,13 @@ import java.util.Scanner;
 import java.util.function.Function;
 
 import org.bukkit.Material;
+import org.bukkit.block.Biome;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import dzuchun.paper.slimeores.data.VeinPersistedDataType.VeinType;
 import dzuchun.paper.slimeores.util.Util;
 import dzuchun.paper.slimeores.util.WeightedRandomHolder;
+import dzuchun.paper.slimeores.world.OreChunksSystem.ChunkType;
 
 public class Config {
 
@@ -199,7 +201,7 @@ public class Config {
 	};
 
 	public static final Instance<Map<VeinType, Double>, Collection<String>> VEIN_HEALTH_MULTIPLIER = new Instance<>(
-			"Vein health multiplier", DEFAULT_VEIN_HEALTH_MULTIPLIER,
+			"Vein health multipliers", DEFAULT_VEIN_HEALTH_MULTIPLIER,
 			multipliers -> collectionToStringCollection(multipliers.entrySet(),
 					entry -> String.format("%s multiplied %.2f times", entry.getKey().name(), entry.getValue())),
 			collection -> mapFromEntryCollection(collectionFromStringCollection(collection, string -> {
@@ -212,18 +214,108 @@ public class Config {
 				return Map.entry(type, multiplier);
 			})));
 
-	private static final Map<VeinType, Integer> DEFAULT_VEIN_GENERATION_WEIGHTS = new LinkedHashMap<>(0) {
+	private static final Map<ChunkType, Double> DEFAULT_CHUNK_TYPE_COOLDOWN_MODIFIER = new LinkedHashMap<>(0) {
 		private static final long serialVersionUID = 1L;
 
 		{
-			this.put(VeinType.NONE, 1);
+			this.put(ChunkType.COLD_ORE, 0.5d);
+		}
+	};
+
+	public static final Instance<Map<ChunkType, Double>, Collection<String>> CHUNK_TYPE_COOLDOWN_MULTIPLIER = new Instance<>(
+			"Chunk type cooldown multipliers", DEFAULT_CHUNK_TYPE_COOLDOWN_MODIFIER,
+			multipliers -> collectionToStringCollection(multipliers.entrySet(),
+					entry -> String.format("%s multiplied %.2f times", entry.getKey().name(), entry.getValue())),
+			collection -> mapFromEntryCollection(collectionFromStringCollection(collection, string -> {
+				Scanner sc = new Scanner(string);
+				String name = sc.next();
+				ChunkType type = Enum.valueOf(ChunkType.class, name);
+				sc.next();
+				double multiplier = sc.nextDouble();
+				sc.close();
+				return Map.entry(type, multiplier);
+			})));
+
+	private static final Map<ChunkType, Integer> DEFAULT_CHUNK_GENERATION_WEIGHTS = new LinkedHashMap<>(0) {
+		private static final long serialVersionUID = 1L;
+
+		{
+			this.put(ChunkType.NO_ORE, 1);
+			this.put(ChunkType.ORE, 1);
+		}
+	};
+
+	private static final Instance<Map<ChunkType, Integer>, Collection<String>> CHUNK_GENERATION_WEIGHTS = new Instance<>(
+			"Chunk type generation weights (theese are proportional to probabillity that a newly generated chunk will be a corresponsing type)",
+			DEFAULT_CHUNK_GENERATION_WEIGHTS,
+			multipliers -> collectionToStringCollection(multipliers.entrySet(),
+					entry -> String.format("%s weight %d", entry.getKey().name(), entry.getValue())),
+			collection -> mapFromEntryCollection(collectionFromStringCollection(collection, string -> {
+				Scanner sc = new Scanner(string);
+				String name = sc.next();
+				ChunkType type = Enum.valueOf(ChunkType.class, name);
+				sc.next();
+				int weight = sc.nextInt();
+				sc.close();
+				return Map.entry(type, weight);
+			})));
+
+	public static final WeightedRandomHolder<ChunkType> CHUNK_TYPE_GENERATOR;
+
+	private static final Map<ChunkType, Integer> DEFAULT_COLD_CHUNK_TYPE_GENERATION_WEIGHTS = new LinkedHashMap<>(0) {
+		private static final long serialVersionUID = 1L;
+
+		{
+			this.put(ChunkType.NO_ORE, 1);
+			this.put(ChunkType.COLD_ORE, 2);
+		}
+	};
+
+	private static final Instance<Map<ChunkType, Integer>, Collection<String>> COLD_CHUNK_TYPE_GENERATION_WEIGHTS = new Instance<>(
+			"Chunk type generation weights used for cold biomes", DEFAULT_COLD_CHUNK_TYPE_GENERATION_WEIGHTS,
+			multipliers -> collectionToStringCollection(multipliers.entrySet(),
+					entry -> String.format("%s weight %d", entry.getKey().name(), entry.getValue())),
+			collection -> mapFromEntryCollection(collectionFromStringCollection(collection, string -> {
+				Scanner sc = new Scanner(string);
+				String name = sc.next();
+				ChunkType type = Enum.valueOf(ChunkType.class, name);
+				sc.next();
+				int weight = sc.nextInt();
+				sc.close();
+				return Map.entry(type, weight);
+			})));
+
+	public static final WeightedRandomHolder<ChunkType> COLD_CHUNK_TYPE_GENERATOR;
+
+	private static final Map<VeinType, Integer> DEFAULT_NO_ORE_VEIN_GENERATION_WEIGHTS = new LinkedHashMap<>(0);
+
+	private static final Instance<Map<VeinType, Integer>, Collection<String>> NO_ORE_VEIN_GENERATION_WEIGHTS = new Instance<>(
+			"Vein generation weights used for chunk with no ore (logically is empty)",
+			DEFAULT_NO_ORE_VEIN_GENERATION_WEIGHTS,
+			multipliers -> collectionToStringCollection(multipliers.entrySet(),
+					entry -> String.format("%s weight %d", entry.getKey().name(), entry.getValue())),
+			collection -> mapFromEntryCollection(collectionFromStringCollection(collection, string -> {
+				Scanner sc = new Scanner(string);
+				String name = sc.next();
+				VeinType type = Enum.valueOf(VeinType.class, name);
+				sc.next();
+				int weight = sc.nextInt();
+				sc.close();
+				return Map.entry(type, weight);
+			})));
+
+	public static final WeightedRandomHolder<VeinType> NO_ORE_VEIN_GENERATOR;
+
+	private static final Map<VeinType, Integer> DEFAULT_ORE_VEIN_GENERATION_WEIGHTS = new LinkedHashMap<>(0) {
+		private static final long serialVersionUID = 1L;
+
+		{
 			this.put(VeinType.RAW_IRON, 1);
 		}
 	};
 
-	private static final Instance<Map<VeinType, Integer>, Collection<String>> VEIN_GENERATION_WEIGHTS = new Instance<>(
-			"Vein generation weights (theese are proportional to probabillity that a newly generated chunk will be a corresponsing type)",
-			DEFAULT_VEIN_GENERATION_WEIGHTS,
+	private static final Instance<Map<VeinType, Integer>, Collection<String>> ORE_VEIN_GENERATION_WEIGHTS = new Instance<>(
+			"Vein generation weights used for regular ore chunks", DEFAULT_ORE_VEIN_GENERATION_WEIGHTS,
 			multipliers -> collectionToStringCollection(multipliers.entrySet(),
 					entry -> String.format("%s weight %d", entry.getKey().name(), entry.getValue())),
 			collection -> mapFromEntryCollection(collectionFromStringCollection(collection, string -> {
@@ -236,19 +328,19 @@ public class Config {
 				return Map.entry(type, weight);
 			})));
 
-	public static final WeightedRandomHolder<VeinType> VEIN_TYPE_GENERATOR;
+	public static final WeightedRandomHolder<VeinType> ORE_VEIN_GENERATOR;
 
-	private static final Map<VeinType, Integer> DEFAULT_COLD_VEIN_GENERATION_WEIGHTS = new LinkedHashMap<>(0) {
+	private static final Map<VeinType, Integer> DEFAULT_COLD_ORE_VEIN_GENERATION_WEIGHTS = new LinkedHashMap<>(0) {
 		private static final long serialVersionUID = 1L;
 
 		{
-			this.put(VeinType.NONE, 1);
-			this.put(VeinType.RAW_IRON, 2);
+			this.put(VeinType.RAW_IRON, 1);
 		}
 	};
 
-	private static final Instance<Map<VeinType, Integer>, Collection<String>> COLD_VEIN_GENERATION_WEIGHTS = new Instance<>(
-			"Vein generation weights used for cold chunks", DEFAULT_COLD_VEIN_GENERATION_WEIGHTS,
+	private static final Instance<Map<VeinType, Integer>, Collection<String>> COLD_ORE_VEIN_GENERATION_WEIGHTS = new Instance<>(
+			"Vein generation weights used for ore chunks generated in cold biomes",
+			DEFAULT_COLD_ORE_VEIN_GENERATION_WEIGHTS,
 			multipliers -> collectionToStringCollection(multipliers.entrySet(),
 					entry -> String.format("%s weight %d", entry.getKey().name(), entry.getValue())),
 			collection -> mapFromEntryCollection(collectionFromStringCollection(collection, string -> {
@@ -261,22 +353,59 @@ public class Config {
 				return Map.entry(type, weight);
 			})));
 
-	public static final WeightedRandomHolder<VeinType> COLD_VEIN_TYPE_GENERATOR;
+	public static final WeightedRandomHolder<VeinType> COLD_ORE_VEIN_GENERATOR;
+
+	/**
+	 * Contains biomes ore chunks should not spawn in
+	 */
+	private static final List<Biome> DEFAULT_FORBIDDEN_BIOMES = Arrays.asList(Biome.OCEAN, Biome.COLD_OCEAN,
+			Biome.DEEP_COLD_OCEAN, Biome.DEEP_FROZEN_OCEAN, Biome.DEEP_LUKEWARM_OCEAN, Biome.DEEP_OCEAN,
+			Biome.DEEP_WARM_OCEAN, Biome.FROZEN_OCEAN, Biome.LUKEWARM_OCEAN, Biome.WARM_OCEAN, Biome.RIVER,
+			Biome.FROZEN_RIVER, Biome.DESERT_LAKES);
+
+	public static final Instance<Collection<Biome>, Collection<String>> FORBIDDEN_BIOMES = new Instance<>(
+			"Forbidden biomes for vein generation (veins will never spawn in them)", DEFAULT_FORBIDDEN_BIOMES,
+			b -> collectionToStringCollection(b, enumSerializer(Biome.class)),
+			s -> collectionFromStringCollection(s, enumDeserializer(Biome.class)));
+
+	/**
+	 * Contains biomes that have 66% to have ore instead of 50%.
+	 */
+	private static final List<Biome> DEFAULT_COLD_BIOMES = Arrays.asList(Biome.TAIGA, Biome.TAIGA_HILLS,
+			Biome.TAIGA_MOUNTAINS, Biome.GIANT_SPRUCE_TAIGA, Biome.GIANT_SPRUCE_TAIGA_HILLS, Biome.GIANT_TREE_TAIGA,
+			Biome.GIANT_TREE_TAIGA_HILLS, Biome.SNOWY_TAIGA, Biome.SNOWY_TAIGA_HILLS, Biome.SNOWY_TAIGA_MOUNTAINS,
+			Biome.SNOWY_BEACH, Biome.SNOWY_MOUNTAINS, Biome.SNOWY_TUNDRA);
+
+	public static final Instance<Collection<Biome>, Collection<String>> COLD_BIOMES = new Instance<>(
+			"Cold biomes for vein generation (veins spawn differently in them)", DEFAULT_COLD_BIOMES,
+			b -> collectionToStringCollection(b, enumSerializer(Biome.class)),
+			s -> collectionFromStringCollection(s, enumDeserializer(Biome.class)));
 
 	private static final List<Instance<?, ?>> CONFIGS = Arrays.asList(PICKAXES, ALLOWED_SPAWN_MATERIALS,
 			ALLOWED_SPAWN_COVERS, VEINS_GLOW, GENERATION_HEIGHT_DEVIATION, CHECK_PATTERN, RESPAWN_CHECK_INTERVAL,
-			ORE_RESPAWN_COOLDOWN, VEIN_HEALTH_MULTIPLIER, VEIN_GENERATION_WEIGHTS, COLD_VEIN_GENERATION_WEIGHTS);
+			ORE_RESPAWN_COOLDOWN, VEIN_HEALTH_MULTIPLIER, CHUNK_TYPE_COOLDOWN_MULTIPLIER, CHUNK_GENERATION_WEIGHTS,
+			COLD_CHUNK_TYPE_GENERATION_WEIGHTS, NO_ORE_VEIN_GENERATION_WEIGHTS, ORE_VEIN_GENERATION_WEIGHTS,
+			COLD_ORE_VEIN_GENERATION_WEIGHTS, FORBIDDEN_BIOMES, COLD_BIOMES);
 //	private static final List<Instance<?, ?>> CONFIGS = Arrays.asList(PICKAXES);
 
 	static {
-		VEIN_TYPE_GENERATOR = new WeightedRandomHolder<>(VEIN_GENERATION_WEIGHTS.get());
-		COLD_VEIN_TYPE_GENERATOR = new WeightedRandomHolder<>(COLD_VEIN_GENERATION_WEIGHTS.get());
+		CHUNK_TYPE_GENERATOR = new WeightedRandomHolder<>(CHUNK_GENERATION_WEIGHTS.get());
+		COLD_CHUNK_TYPE_GENERATOR = new WeightedRandomHolder<>(COLD_CHUNK_TYPE_GENERATION_WEIGHTS.get());
+
+		NO_ORE_VEIN_GENERATOR = new WeightedRandomHolder<>(NO_ORE_VEIN_GENERATION_WEIGHTS.get());
+		ORE_VEIN_GENERATOR = new WeightedRandomHolder<>(ORE_VEIN_GENERATION_WEIGHTS.get());
+		COLD_ORE_VEIN_GENERATOR = new WeightedRandomHolder<>(COLD_ORE_VEIN_GENERATION_WEIGHTS.get());
 	}
 
 	public static void init() {
 		final FileConfiguration cfg = SlimeOres.getInstance().getConfig();
 		CONFIGS.forEach(config -> config.bind(cfg));
-		VEIN_TYPE_GENERATOR.compile();
-		COLD_VEIN_TYPE_GENERATOR.compile();
+		// Compiling chunk type generators
+		CHUNK_TYPE_GENERATOR.compile();
+		COLD_CHUNK_TYPE_GENERATOR.compile();
+		// Compiling vein type generators
+		NO_ORE_VEIN_GENERATOR.compile();
+		ORE_VEIN_GENERATOR.compile();
+		COLD_ORE_VEIN_GENERATOR.compile();
 	}
 }
